@@ -2,18 +2,25 @@ use std::fmt;
 
 #[derive(Debug)]
 enum Event {
-  Registered,
+  ExtensionReady(&'static str),
+}
+
+#[derive(Clone)]
+struct ExtensionMeta {
+  pub name: &'static str,
+  pub display_name: &'static str,
+  pub version: &'static str,
 }
 
 trait Extension {
-  // Name of the extension
-  fn name(&self) -> &'static str;
+  // Metadata of the extension
+  fn meta(&self) -> ExtensionMeta;
 
   // Invoke when the extension is loaded
   fn init(&self, engine: &Engine);
 
   // Invoke when events are emitted
-  fn handle(&self, event: Event, engine: &Engine);
+  fn handle(&self, event: &Event, engine: &Engine);
 }
 
 struct Editor {}
@@ -25,18 +32,25 @@ impl Editor {
 }
 
 impl Extension for Editor {
-  fn name(&self) -> &'static str {
-    "core.editor"
+  fn meta(&self) -> ExtensionMeta {
+    ExtensionMeta {
+      name: "core.editor",
+      display_name: "Editor",
+      version: "v0.0.1",
+    }
   }
 
   fn init(&self, engine: &Engine) {
     println!("Editor is initialized.");
 
     println!("Host: {}", engine.host);
+
+    let ready_event = Event::ExtensionReady(self.meta().name);
+    engine.emit(ready_event);
   }
 
-  fn handle(&self, event: Event, engine: &Engine) {
-    println!("Incoming Event: {:?}", event);
+  fn handle(&self, event: &Event, engine: &Engine) {
+    println!("Incoming Event: {:?} @ {}", event, engine.host);
   }
 }
 
@@ -53,12 +67,26 @@ impl Engine {
     }
   }
 
-  fn start(&self) {
-    for extension in self.extensions.iter() {
-      extension.init(self);
+  fn configure(&mut self, ext: Box<Extension>) {
+    self.extensions.push(ext);
+  }
 
-      let name = &*extension.name();
-      println!("[Extension::Init] {}", name);
+  fn start(&self) {
+    for ext in self.extensions.iter() {
+      ext.init(self);
+
+      let meta = ext.meta();
+
+      println!(
+        "[Extension] Initialized {} ({})",
+        meta.display_name, meta.name
+      );
+    }
+  }
+
+  fn emit(&self, event: Event) {
+    for extension in self.extensions.iter() {
+      extension.handle(&event, self)
     }
   }
 }
@@ -67,8 +95,7 @@ fn main() {
   let mut engine = Engine::new("phoom.in.th");
 
   let editor = Editor::new();
-
-  engine.extensions.push(Box::new(editor));
+  engine.configure(Box::new(editor));
 
   engine.start();
 }
