@@ -1,0 +1,6 @@
+[package]
+name = "peridot"
+version = "0.1.0"
+authors = ["Phoomparin Mano <work@phoom.in.th>"]
+
+[dependencies]
